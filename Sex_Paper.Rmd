@@ -1,0 +1,1020 @@
+Record of Commands Used 
+
+```{r, echo=FALSE, warning=FALSE}
+# This code chunk simply makes sure that all packages used here are installed, it will not be shown in the report (notice echo = FALSE).
+packages <- c("dplyr", "ggplot2", "tidyr", "statsr","tidyverse","htmlwidgets","plotly")
+if ( length(missing_pkgs <- setdiff(packages, rownames(installed.packages()))) > 0) {
+  message("Installing missing package(s): ", paste(missing_pkgs, collapse = ", "))
+  install.packages(missing_pkgs)
+}
+
+
+```
+
+```{r}
+#Loading in neccesary packages (Make sure you actually have them, using the same package names but "load" instead of "library")
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(statsr)
+library(tidyverse)
+library(htmlwidgets)
+library(plotly)
+```
+
+```{r}
+
+arxivF <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/arxivF.csv"))
+arxivL <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/arxivL.csv"))
+#bioRxiv/medRxiv datasets
+bioRxivF <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/bioRxivF.csv"))
+bioRxivL <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/bioRxivL.csv"))
+#dataset for limitation figure
+MCO <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/MCO.csv")
+#Confidence intervals for figures
+CI1 <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI1.csv")
+CI2 <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI2.csv")
+CI4A <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI3.csv")
+CI4B <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI4.csv")
+CI3A <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI3A.csv")
+CI3B <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI3B.csv")
+CI5A <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI5A.csv")
+CI5B <- read.csv(file= "https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/CI5B.csv")
+
+```
+
+-----------------------------------------------
+TRIMMING OF RAW DATA
+```{r}
+#Selecting only 2017-2020
+allyr <- c("2017","2018","2019","2020") 
+
+#Remove all names with database n<10
+bioRxivF <- bioRxivF %>% filter(Samples >=10) 
+
+#Remove all name accuracy below 95, and select all years between 2017-2020
+bioRxivF_ <- bioRxivF %>% filter(Year %in% allyr, Accuracy >=95)
+
+#Create a table with only the Biorxiv and Medrxiv covid-related papers
+FC<- bioRxivF_ %>% filter(Topic == "COVID") 
+
+#Create a table with the opposite, remove any papers labelled "C" (As they are simply "COVID" topic paper repeats, grouped into their actual submitted topics)
+FN<- bioRxivF_ %>% filter(Topic != "COVID", Covid !="C") 
+
+#Bind the two to make a new dataset with no repeats and the neccessary trimming
+bioRxivF_ <- rbind(FC,FN) #Merge the two cells to recreate original table, now with no COVID-19 Paper repeats
+
+
+```
+```{r}
+#Removing MedRxiv papers from dataset
+Fig1<- filter(bioRxivF_, Server != "Medrxiv")
+
+#Prepare dataset for graphing by grouping into year, month sex and summarizing total males/females in each.
+PROP_SEXF <- Fig1 %>% group_by(Year, Month, Sex) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), 
+
+#making the N count label seen on figure 1
+flabel=ifelse(Sex=="female", paste0("", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+#Remove all male entries, so that female freq can be graphed individually.
+PROP_SEXF <- PROP_SEXF %>% filter(Sex=="female") 
+#Adding 95% confidence value
+PROP_SEXF <- cbind(PROP_SEXF, CI1)
+
+#Plot
+figure1<-ggplot(PROP_SEXF, aes(Year,freq,shape=Month, fill=Month, colour=Month )) + geom_point(alpha=1,size=3, position=position_dodge(0.15), aes(text=paste("Year: ", Year, "\n", "Month: ", Month, "\n", "Female Percentage: ", frequency*100, "%", "\n", "Total n: ", flabel, "\n"))) + ylab("Percentage") + ggtitle("Female first author percentage for all Jan,April,May bioRxiv articles") +  geom_errorbar(alpha=0.5, aes(ymin=freq-CI, ymax=freq+CI), width=.2,
+                 position=position_dodge(.15)) +  scale_shape_manual(values=c(21, 23, 25))+scale_y_continuous(labels = scales::percent) + scale_colour_manual(values=c("dodgerblue2", "darkorange1","magenta", "black"))+ scale_fill_manual(values=c("dodgerblue2", "darkorange1","magenta"))+theme_light()+theme(text=element_text(size=12.5))+geom_line(linetype="dashed",size=0.3, alpha=0.5,position=position_dodge(0.15)) +
+  geom_text(aes(y=0.285, x=2017.5, label="*"),size=10,colour="darkorange1")+
+  geom_text(aes(y=.315, x=2017.5, label="*"),size=10)+
+  geom_text(aes( y=.3745,x=2018.5, label="*"), size=10)+ 
+  geom_text(aes(x=2020.1, y=0.362), label= "*", size=10,colour="darkorange1") +
+  geom_text(x=2020.1, y=.368, label="*", size=10, colour="magenta")+
+  geom_text(x=2020.1, y=.376, label="*", size=10, colour="dodgerblue2")
+
+
+
+Figure1 <- ggplotly(figure1, tooltip = "text")
+#Saving plot for interactive viewing
+htmlwidgets::saveWidget(as_widget(Figure1), "Figure1.html")
+
+api_create(Figure1)
+
+```
+
+----------------------------------------
+TABLES FOR MANUAL STATISTICAL TESTS
+```{r}
+#Making files with just biorxiv, medrxiv or COVID papers for external statistical calculations. (To proof-check the RStudio Calculations)
+CSVFBiorxiv <- filter(bioRxivF, Samples >=10, Accuracy >=95, Server== "Biorxiv", Topic!="COVID", Covid !="C") 
+CSVFMedrxiv <- filter(bioRxivF, Samples >=10, Accuracy >=95, Server== "Medrxiv")
+CSVFCOVID <- filter(bioRxivF, Samples >=10, Accuracy >=95, Topic=="COVID")
+CSVF2020 <- filter(bioRxivF_, Samples >=10, Accuracy >=95, Year =="2020")
+
+#Grouping names based on specific variables, summarizing total N in each bin.
+
+CSVFBiorxiv <-group_by(CSVFBiorxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVFMedrxiv <-group_by(CSVFMedrxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVFCOVID <-group_by(CSVFCOVID, Server, Month, Sex)%>% summarise(n=n())
+CSVF2020 <-group_by(CSVF2020, Server, Month, Sex)
+
+#Saving each as a CSV file, so that it can be sent for analysis through other means.
+
+#write.csv(CSVFBiorxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Firstnamebiorxiv.csv", row.names=TRUE)
+#write.csv(CSVFMedrxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Firstnamemedrxiv.csv", row.names=TRUE)
+#write.csv(CSVFCOVID, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\FirstnameCOVID.csv", row.names=TRUE)
+#write.csv(CSVF2020, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\CSVF2020.csv", row.names=TRUE)
+```
+
+STATISTICAL TESTS (As seen in Figure 1 Legend)
+```{r}
+#Grouping the matrix into respective months
+Fig1J <- filter(Fig1, Month == "January")
+Fig1A <- filter(Fig1, Month == "April")
+Fig1M <- filter(Fig1, Month == "May")
+
+#Chi-sq test for each month, all years
+chisq.test(Fig1J$Year, Fig1J$Sex, correct=FALSE)
+chisq.test(Fig1A$Year, Fig1A$Sex, correct=FALSE)
+chisq.test(Fig1M$Year, Fig1M$Sex, correct=FALSE)
+
+#isolating into groups of seceding years
+
+yr1<-c("2017","2018")
+yr2<-c("2018","2019")
+yr3 <-c("2019","2020")
+
+#creating groups of paired years, for each month
+
+Fig1JX <- filter(Fig1J, Year %in% yr1)
+Fig1AX <- filter(Fig1A, Year %in% yr1)
+Fig1MX <- filter(Fig1M, Year %in% yr1)
+
+Fig1JY <- filter(Fig1J, Year %in% yr2)
+Fig1AY <- filter(Fig1A, Year %in% yr2)
+Fig1MY <- filter(Fig1M, Year %in% yr2)
+
+Fig1JZ <- filter(Fig1J, Year %in% yr3)
+Fig1AZ <- filter(Fig1A, Year %in% yr3)
+Fig1MZ <- filter(Fig1M, Year %in% yr3)
+
+#Two proportion t-test (Same calculation and p value as chi-sq, but only 2 years so this one is better)
+inference(y = Sex, x = Year, data = Fig1JY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig1AY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig1MY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+
+#Chi squared test if you want to verify that the same p value is returned as above.
+
+chisq.test(Fig1JX$Year, Fig1JX$Sex, correct=FALSE)
+chisq.test(Fig1AX$Year, Fig1AX$Sex, correct=FALSE)
+chisq.test(Fig1MX$Year, Fig1MX$Sex, correct=FALSE)
+
+chisq.test(Fig1JY$Year, Fig1JY$Sex, correct=FALSE)
+chisq.test(Fig1AY$Year, Fig1AY$Sex, correct=FALSE)
+chisq.test(Fig1MY$Year, Fig1MY$Sex, correct=FALSE)
+
+chisq.test(Fig1JZ$Year, Fig1JZ$Sex, correct=FALSE)
+chisq.test(Fig1AZ$Year, Fig1AZ$Sex, correct=FALSE)
+chisq.test(Fig1MZ$Year, Fig1MZ$Sex, correct=FALSE)
+```
+
+----------------------------------------
+FIGURE 3A
+```{r}
+#Organizational Purposes
+Fig3A <-bioRxivF_ 
+#Making a new COVID section for simple data display
+Fig3A <- mutate(Fig3A, COVID= ifelse(Covid=="C" , "COVID-19", "Other")) 
+#Making only 2020
+Fig3A <-filter(Fig3A, Year == "2020") 
+#Graphing purposes
+fig3A <- Fig3A %>% group_by(COVID,Sex) %>% summarize(n=n()) %>% mutate(freq= n/sum(n)) 
+
+fig3A <- fig3A %>% mutate(frequency = round(freq, digits = 3),cumul.sum = cumsum(freq),
+
+label=ifelse(Sex=="female", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3)) 
+#Removing male rows, to graph female proportion
+fig3A <- filter(fig3A, Sex== "female")
+#Adding CI values
+fig3A <- cbind(fig3A, CI3A)
+
+fig3A$labelpos <- ifelse(fig3A$Sex=="female", fig3A$frequency/2, 1 - fig3A$frequency/2)
+#Saving the file
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig3A.jpeg", quality=100, height=750,width=450)
+#Plot
+ggplot(fig3A, aes(x=COVID,y=freq, fill=COVID, color=COVID)) +
+  geom_bar(width=0.75, stat='identity') + geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2) +theme_light()+theme(text=element_text(size=25)) +ylab("Female Percentage") + xlab("Paper Topic") +scale_fill_manual(values=c("forestgreen", "forestgreen"))+ theme(legend.position = "none")+scale_color_manual(values=c("black","black"))+scale_y_continuous(labels = scales::percent)+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size=7) + geom_text(aes(y=cumul.sum, label=label), vjust=-1.5, size=7)
+
+#Chi Squared test for COVID-related vs other papers, female proportion
+chisq.test(Fig3A$COVID, Fig3A$Sex, correct=FALSE)
+
+```
+
+```{r}
+#Alternative test
+inference(y = Sex, x = COVID, data = Fig3A, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+EXACT SAME CODE, BUT FOR LAST NAME(ALL CODE DESCRIPTION CAN BE FOUND IN THE ABOVE CODE)
+```{r}
+bioRxivL <- bioRxivL %>% filter(Samples >=10) 
+bioRxivL_ <- bioRxivL %>% filter(Samples >=10, Accuracy >= 95, Year %in% allyr) 
+LC<- bioRxivL_ %>% filter(Topic == "COVID") 
+LN<- bioRxivL_ %>% filter(Topic != "COVID", Covid !="C") 
+bioRxivL_ <- rbind(LC,LN) 
+```
+```{r}
+
+Fig2<- filter(bioRxivL_, Server != "Medrxiv")
+
+#Prepare dataset for graphing by grouping into year, month sex and summarizing total males/females in each.
+PROP_SEXL <- Fig2 %>% group_by(Year, Month, Sex) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), 
+
+#making the N count label seen on figure 1
+llabel=ifelse(Sex=="female", paste0("", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+#Remove all male entries, so that female freq can be graphed individually.
+PROP_SEXL <- PROP_SEXL %>% filter(Sex=="female") 
+PROP_SEXL <- cbind(PROP_SEXL, CI2)
+
+figure2<-ggplot(PROP_SEXL, aes(Year,freq,shape=Month, fill=Month, color=Month )) + geom_point(alpha=1,size=3, position=position_dodge(0.15), aes(text=paste("Year: ", Year, "\n", "Month: ", Month, "\n", "Female Percentage: ", frequency*100, "%", "\n", "Total n: ", llabel, "\n"))) + ylab("Percentage") +ggtitle("Female last author percentage for all Jan,April,May bioRxiv articles") +  geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2,
+                 position=position_dodge(.15)) +  scale_shape_manual(values=c(21, 23, 25))+scale_y_continuous(labels = scales::percent) + scale_colour_manual(values=c("dodgerblue2", "darkorange1","magenta"))+ scale_fill_manual(values=c("dodgerblue2", "darkorange1","magenta"))+theme_light()+theme(text=element_text(size=12.5))+geom_line(linetype="dashed",size=0.3, alpha=0.5,position=position_dodge(0.15)) +
+  geom_text(aes(x=2017.5,y=.1805), size=10, label="*")+
+  geom_text(aes(x=2020.1,y=.218), size=10, label="*", colour="dodgerblue2")+
+  geom_text(aes(x=2020.1,y=.227), size=10, label="*",colour="magenta")+
+  geom_text(aes(x=2020.1,y=.223), size=10, label="*", colour="darkorange1")
+  
+
+
+
+Figure2 <- ggplotly(figure2, tooltip = "text") 
+
+htmlwidgets::saveWidget(as_widget(Figure2), "Figure2.html")
+
+api_create(Figure2)
+
+```
+
+
+```{r}
+CSVLBiorxiv <- filter(bioRxivL, Samples >=10, Accuracy >=95, Server== "Biorxiv", Topic!="COVID", Covid !="C")
+CSVLMedrxiv <- filter(bioRxivL, Samples >=10, Accuracy >=95, Server== "Medrxiv")
+CSVLCOVID <- filter(bioRxivL, Samples >=10, Accuracy >=95, Topic=="COVID")
+CSVL2020 <- filter(bioRxivL_, Samples >=10, Accuracy >=95, Year =="2020")
+CSVLBiorxiv <-group_by(CSVLBiorxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVLMedrxiv <-group_by(CSVLMedrxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVLCOVID <-group_by(CSVLCOVID, Server, Month, Sex)%>% summarise(n=n())
+CSVL2020 <-group_by(CSVL2020, Server, Month, Sex)
+#write.csv(CSVLBiorxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Lastnamebiorxiv.csv", row.names=TRUE)
+#write.csv(CSVLMedrxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Lastnamemedrxiv.csv", row.names=TRUE)
+#write.csv(CSVLCOVID, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\LastnameCOVID.csv", row.names=TRUE)
+#write.csv(CSVL2020, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\CSVL2020.csv", row.names=TRUE)
+```
+
+
+
+STATISTICAL TESTS FOR FIGURE 2
+```{r}
+#Making files with just biorxiv, medrxiv or COVID papers for external statistical calculations. (To proof-check the RStudio Calculations)
+CSVFBiorxiv <- filter(bioRxivF, Samples >=10, Accuracy >=95, Server== "Biorxiv", Topic!="COVID", Covid !="C") 
+CSVFMedrxiv <- filter(bioRxivF, Samples >=10, Accuracy >=95, Server== "Medrxiv")
+CSVFCOVID <- filter(bioRxivF, Samples >=10, Accuracy >=95, Topic=="COVID")
+CSVF2020 <- filter(bioRxivF_, Samples >=10, Accuracy >=95, Year =="2020")
+
+#Grouping names based on specific variables, summarizing total N in each bin.
+
+CSVFBiorxiv <-group_by(CSVFBiorxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVFMedrxiv <-group_by(CSVFMedrxiv, Month, Topic, Year, Sex)%>% summarise(n=n())
+CSVFCOVID <-group_by(CSVFCOVID, Server, Month, Sex)%>% summarise(n=n())
+CSVF2020 <-group_by(CSVF2020, Server, Month, Sex)
+
+#Saving each as a CSV file, so that it can be sent for analysis through other means.
+
+#write.csv(CSVFBiorxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Firstnamebiorxiv.csv", row.names=TRUE)
+#write.csv(CSVFMedrxiv, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\Firstnamemedrxiv.csv", row.names=TRUE)
+#write.csv(CSVFCOVID, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\FirstnameCOVID.csv", row.names=TRUE)
+#write.csv(CSVF2020, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\CSVF2020.csv", row.names=TRUE)
+```
+
+STATISTICAL TESTS (As seen in Figure Legend)
+```{r}
+#Grouping the matrix into respective months
+Fig2J <- filter(Fig2, Month == "January")
+Fig2A <- filter(Fig2, Month == "April")
+Fig2M <- filter(Fig2, Month == "May")
+
+#Chi-sq test for each month, all years
+chisq.test(Fig2J$Year, Fig2J$Sex, correct=FALSE)
+chisq.test(Fig2A$Year, Fig2A$Sex, correct=FALSE)
+chisq.test(Fig2M$Year, Fig2M$Sex, correct=FALSE)
+
+#isolating into groups of seceeding years
+
+yr1<-c("2017","2018")
+yr2<-c("2018","2019")
+yr3 <-c("2019","2020")
+
+
+Fig2JX <- filter(Fig2J, Year %in% yr1)
+Fig2AX <- filter(Fig2A, Year %in% yr1)
+Fig2MX <- filter(Fig2M, Year %in% yr1)
+
+Fig2JY <- filter(Fig2J, Year %in% yr2)
+Fig2AY <- filter(Fig2A, Year %in% yr2)
+Fig2MY <- filter(Fig2M, Year %in% yr2)
+
+Fig2JZ <- filter(Fig2J, Year %in% yr3)
+Fig2AZ <- filter(Fig2A, Year %in% yr3)
+Fig2MZ <- filter(Fig2M, Year %in% yr3)
+
+#Two proportion t-test (Same calculation and p value as chi-sq, but only 2 years so this one is better)
+inference(y = Sex, x = Year, data = Fig2JY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig2AY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig2MY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+
+#Chi squared test if you want to verify that the same p value is returned as above.
+
+chisq.test(Fig2JX$Year, Fig2JX$Sex, correct=FALSE)
+chisq.test(Fig2AX$Year, Fig2AX$Sex, correct=FALSE)
+chisq.test(Fig2MX$Year, Fig2MX$Sex, correct=FALSE)
+
+chisq.test(Fig2JY$Year, Fig2JY$Sex, correct=FALSE)
+chisq.test(Fig2AY$Year, Fig2AY$Sex, correct=FALSE)
+chisq.test(Fig2MY$Year, Fig2MY$Sex, correct=FALSE)
+
+chisq.test(Fig2JZ$Year, Fig2JZ$Sex, correct=FALSE)
+chisq.test(Fig2AZ$Year, Fig2AZ$Sex, correct=FALSE)
+chisq.test(Fig2MZ$Year, Fig2MZ$Sex, correct=FALSE)
+```
+
+FIGURE 3B
+```{r}
+#See fig3A for Code description
+Fig3B <-bioRxivL_ 
+
+Fig3B <- mutate(Fig3B, COVID= ifelse(Covid=="C" , "COVID-19", "Other")) 
+
+Fig3B <-filter(Fig3B, Year == "2020") 
+
+fig3B <- Fig3B %>% group_by(COVID,Sex) %>% summarize(n=n()) %>% mutate(freq= n/sum(n)) 
+
+fig3B <- fig3B %>% mutate(frequency = round(freq, digits = 3),cumul.sum = cumsum(freq),
+
+label=ifelse(Sex=="female", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+fig3B <- filter(fig3B, Sex== "female")
+
+fig3B <- cbind(fig3B, CI3B)
+
+fig3B$labelpos <- ifelse(fig3B$Sex=="female", fig3B$frequency/2, 1 - fig3B$frequency/2)
+
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig3B.jpeg", quality=100, height=750,width=450)
+
+ggplot(fig3B, aes(x=COVID,y=freq, fill=COVID, color=COVID)) +
+  geom_bar(width=0.75, stat='identity') + geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2) +theme_light()+theme(text=element_text(size=25)) +ylab("Female Percentage") + xlab("Paper Topic") +scale_fill_manual(values=c("forestgreen", "forestgreen"))+ theme(legend.position = "none")+scale_color_manual(values=c("black","black"))+scale_y_continuous(labels = scales::percent)+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size=7) + geom_text(aes(y=cumul.sum, label=label), vjust=-1.5, size=7)
+```
+
+```{r}
+chisq.test(Fig3B$COVID, Fig3B$Sex, correct=FALSE)
+inference(y = Sex, x = COVID, data = Fig3B, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CODE FOR FIRST AUTHOR ARXIV DATA (PHYSICS, MATHEMATICS, STATISTICS)
+
+----------------------------------------------------------------------------
+RAW DATA TRIMMING
+```{r}
+#Mutating Covid so it produces "COVID-19" and "Other" instead of "C" and " ", filtering based on previously mentioned parameters.
+arxivF_<- arxivF %>% filter(Samples >=10, Accuracy >= 95, !is.na(Name)) %>% mutate(COVID = ifelse(Covid == "C", "COVID-19", "Other"))
+```
+
+
+
+```{r}
+Fig4A<- arxivF_
+
+#Prepare dataset for graphing by grouping into year, month sex and summarizing total males/females in each.
+APROP_SEXF <- Fig4A %>% group_by(Year, Month, Sex) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), 
+
+#making the N count label seen on figure 1
+aflabel=ifelse(Sex=="female", paste0("", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+#Remove all male entries, so that female freq can be graphed individually.
+APROP_SEXF <- APROP_SEXF %>% filter(Sex=="female") 
+
+#Adding confidence interval values
+APROP_SEXF <- cbind(APROP_SEXF, CI4A)
+
+#The plot
+
+figure4A <-ggplot(APROP_SEXF, aes(Year,freq,shape=Month, fill=Month, color=Month )) + geom_point(alpha=1,size=3, position=position_dodge(0.15), aes(text=paste("Year: ", Year, "\n", "Month: ", Month, "\n", "Female Percentage: ", frequency*100, "%", "\n", "Total n: ", aflabel, "\n"))) + ylab("Percentage") +ggtitle("Female first author percentage for all Jan,April,May arXiv articles")+  geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2,
+                 position=position_dodge(.15)) +  scale_shape_manual(values=c(21, 23, 25))+scale_y_continuous(labels = scales::percent) + scale_colour_manual(values=c("dodgerblue2", "darkorange1","magenta"))+ scale_fill_manual(values=c("dodgerblue2", "darkorange1","magenta"))+theme_light()+theme(text=element_text(size=12.5))+geom_line(linetype="dashed",size=0.3, alpha=0.5,position=position_dodge(0.15))
+
+
+
+
+
+
+
+#Making the plot interactive
+Figure4A <- ggplotly(figure4A, tooltip = "text")
+
+htmlwidgets::saveWidget(as_widget(Figure4A), "Figure4A.html")
+
+api_create(Figure4A)
+
+```
+
+-----------------------------------------------------------------------
+TABLES FOR Manual Stat Tests
+```{r}
+#Making file for external statistical calculations. (To proof-check the RStudio Calculations)
+ArxivCOVIDF <- filter(arxivF, Samples >=10, Accuracy >=95, COVID=="COVID-19") 
+ArxivOtherF <- filter(arxivF, Samples >=10, Accuracy >=95, COVID=="Other")
+
+#Making the tables into relevant groups, summarizing the total amount of names that fall into each category
+
+ArxivCOVIDF <-group_by(ArxivCOVIDF, Month, Topic, Year, Sex)%>% summarise(n=n())
+ArxivOtherF <-group_by(ArxivOtherF, Month, Topic, Year, Sex)%>% summarise(n=n())
+
+#Saving each as a CSV file, so that it can be sent for analysis through other means.
+
+write.csv(ArxivCOVIDF, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\ArxivCovidF.csv", row.names=TRUE)
+write.csv(ArxivOtherF, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\ArxivOtherF.csv", row.names=TRUE)
+```
+
+--------------------------------------
+STATISTICAL TESTS FOR FIGURE4A
+```{r}
+#Grouping the matrix into respective months
+Fig4AJ <- filter(arxivF_, Month == "January")
+Fig4AA <- filter(arxivF_, Month == "April")
+Fig4AM <- filter(arxivF_, Month == "May")
+
+#Chi-sq test for each month, all years
+chisq.test(Fig4AJ$Year, Fig4AJ$Sex, correct=FALSE)
+chisq.test(Fig4AA$Year, Fig4AA$Sex, correct=FALSE)
+chisq.test(Fig4AM$Year, Fig4AM$Sex, correct=FALSE)
+
+#isolating for paired years
+
+yr1<-c("2017","2018")
+yr2<-c("2018","2019")
+yr3 <-c("2019","2020")
+
+#Paired years by month
+Fig4AJX <- filter(Fig4AJ, Year %in% yr1)
+Fig4AAX <- filter(Fig4AA, Year %in% yr1)
+Fig4AMX <- filter(Fig4AM, Year %in% yr1)
+
+Fig4AJY <- filter(Fig4AJ, Year %in% yr2)
+Fig4AAY <- filter(Fig4AA, Year %in% yr2)
+Fig4AMY <- filter(Fig4AM, Year %in% yr2)
+
+Fig4AJZ <- filter(Fig4AJ, Year %in% yr3)
+Fig4AAZ <- filter(Fig4AA, Year %in% yr3)
+Fig4AMZ <- filter(Fig4AM, Year %in% yr3)
+
+#Two proportion t-test (Same calculation and p value as chi-sq, but only 2 years so this one is better)
+inference(y = Sex, x = Year, data = Fig4AJY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig4AAY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig4AMY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+
+#Chi squared test if you want to verify that the same p value is returned as above.
+
+chisq.test(Fig4AJX$Year, Fig4AJX$Sex, correct=FALSE)
+chisq.test(Fig4AAX$Year, Fig4AAX$Sex, correct=FALSE)
+chisq.test(Fig4AMX$Year, Fig4AMX$Sex, correct=FALSE)
+
+chisq.test(Fig4AJY$Year, Fig4AJY$Sex, correct=FALSE)
+chisq.test(Fig4AAY$Year, Fig4AAY$Sex, correct=FALSE)
+chisq.test(Fig4AMY$Year, Fig4AMY$Sex, correct=FALSE)
+
+chisq.test(Fig4AJZ$Year, Fig4AJZ$Sex, correct=FALSE)
+chisq.test(Fig4AAZ$Year, Fig4AAZ$Sex, correct=FALSE)
+chisq.test(Fig4AMZ$Year, Fig4AMZ$Sex, correct=FALSE)
+```
+
+
+
+-----------------------------
+FIGURE 5A
+```{r}
+#See fig 3A for info on what the code is doing
+Fig5A <-arxivF_
+
+Fig5A <- mutate(Fig5A, COVID= ifelse(Covid=="C" , "COVID-19", "Other")) 
+
+Fig5A <-filter(Fig5A, Year == "2020") 
+
+fig5A <- Fig5A %>% group_by(COVID,Sex) %>% summarize(n=n()) %>% mutate(freq= n/sum(n)) 
+
+fig5A <- fig5A %>% mutate(frequency = round(freq, digits = 3),cumul.sum = cumsum(freq),
+
+label=ifelse(Sex=="female", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+fig5A <- filter(fig5A, Sex== "female")
+
+fig5A <- cbind(fig5A, CI3B)
+
+fig5A$labelpos <- ifelse(fig5A$Sex=="female", fig5A$frequency/2, 1 - fig5A$frequency/2)
+
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig5A.jpeg", quality=100, height=750,width=450)
+
+ggplot(fig5A, aes(x=COVID,y=freq, fill=COVID, color=COVID)) +
+  geom_bar(width=0.75, stat='identity') + geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2) +theme_light()+theme(text=element_text(size=25)) +ylab("Female Percentage") + xlab("Paper Topic") +scale_fill_manual(values=c("forestgreen", "forestgreen"))+ theme(legend.position = "none")+scale_color_manual(values=c("black","black"))+scale_y_continuous(labels = scales::percent)+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size=7) + geom_text(aes(y=cumul.sum, label=label), vjust=-1.5, size=7)
+
+#Chi sq test comparing COVID relatedness and female proportion
+chisq.test(Fig5A$COVID, Fig5A$Sex, correct=FALSE)
+
+
+#Same as above test, for double verification
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------
+LAST NAME(SEE FIRST NAME FOR DESCRIPTION OF CODE)
+```{r}
+arxivL_<- arxivL %>% filter(Samples >=10, Accuracy >= 95, !is.na(Name)) %>% mutate(COVID = ifelse(Covid == "C", "COVID-19", "Other")) 
+```
+
+
+FIGURE4B
+```{r}
+
+Fig4B<- arxivL_
+
+APROP_SEXL <- Fig4B %>% group_by(Year, Month, Sex) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), 
+
+allabel=ifelse(Sex=="female", paste0("", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+APROP_SEXL <- APROP_SEXL %>% filter(Sex=="female") 
+APROP_SEXL <- cbind(APROP_SEXL, CI4B)
+
+figure4B<-ggplot(APROP_SEXL, aes(Year,freq,shape=Month, fill=Month, color=Month )) + geom_point(alpha=1,size=3, position=position_dodge(0.15), aes(text=paste("Year: ", Year, "\n", "Month: ", Month, "\n", "Female Percentage: ", frequency*100, "%", "\n", "Total n: ", allabel, "\n"))) + ylab("Percentage") +ggtitle("Female last author percentage for all Jan,April,May aRXiv articles") +  geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2,
+                 position=position_dodge(.15)) +  scale_shape_manual(values=c(21, 23, 25))+scale_y_continuous(labels = scales::percent) + scale_colour_manual(values=c("dodgerblue2", "darkorange1","magenta"))+ scale_fill_manual(values=c("dodgerblue2", "darkorange1","magenta"))+theme_light()+theme(text=element_text(size=12.5))+geom_line(linetype="dashed",size=0.3, alpha=0.5,position=position_dodge(0.15)) +geom_text(aes(x=2020.1, y=.117, ), label="*", size=10, colour="darkorange1")
+
+Figure4B <- ggplotly(figure4B, tooltip = "text")
+
+htmlwidgets::saveWidget(as_widget(Figure4B), "Figure4B.html")
+
+api_create(Figure4B)
+
+
+
+```
+
+```{r}
+ArxivCOVIDL <- filter(arxivL, Samples >=10, Accuracy >=95, COVID=="COVID-19") 
+ArxivOtherL <- filter(arxivL, Samples >=10, Accuracy >=95, COVID=="Other")
+ArxivCOVIDL <-group_by(ArxivCOVIDL, Month, Topic, Year, Sex)%>% summarise(n=n())
+ArxivOtherL <-group_by(ArxivOtherL, Month, Topic, Year, Sex)%>% summarise(n=n())
+write.csv(ArxivCOVIDL, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\ArxivCovidL.csv", row.names=TRUE)
+write.csv(ArxivOtherL, "C:\\Users\\adamw\\Documents\\Gender Project\\R Code\\ArxivOtherL.csv", row.names=TRUE)
+```
+
+STAT TESTS FOR FIGURE 4B
+```{r}
+Fig4BJ <- filter(arxivL_, Month == "January")
+Fig4BA <- filter(arxivL_, Month == "April")
+Fig4BM <- filter(arxivL_, Month == "May")
+
+chisq.test(Fig4BJ$Year, Fig4BJ$Sex, correct=FALSE)
+chisq.test(Fig4BA$Year, Fig4BA$Sex, correct=FALSE)
+chisq.test(Fig4BM$Year, Fig4BM$Sex, correct=FALSE)
+
+
+yr1<-c("2017","2018")
+yr2<-c("2018","2019")
+yr3 <-c("2019","2020")
+
+
+Fig4BJX <- filter(Fig4BJ, Year %in% yr1)
+Fig4BAX <- filter(Fig4BA, Year %in% yr1)
+Fig4BMX <- filter(Fig4BM, Year %in% yr1)
+
+Fig4BJY <- filter(Fig4BJ, Year %in% yr2)
+Fig4BAY <- filter(Fig4BA, Year %in% yr2)
+Fig4BMY <- filter(Fig4BM, Year %in% yr2)
+
+Fig4BJZ <- filter(Fig4BJ, Year %in% yr3)
+Fig4BAZ <- filter(Fig4BA, Year %in% yr3)
+Fig4BMZ <- filter(Fig4BM, Year %in% yr3)
+
+inference(y = Sex, x = Year, data = Fig4BJY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig4BAY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+inference(y = Sex, x = Year, data = Fig4BMY, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+
+
+chisq.test(Fig4BJX$Year, Fig4BJX$Sex, correct=FALSE)
+chisq.test(Fig4BAX$Year, Fig4BAX$Sex, correct=FALSE)
+chisq.test(Fig4BMX$Year, Fig4BMX$Sex, correct=FALSE)
+
+chisq.test(Fig4BJY$Year, Fig4BJY$Sex, correct=FALSE)
+chisq.test(Fig4BAY$Year, Fig4BAY$Sex, correct=FALSE)
+chisq.test(Fig4BMY$Year, Fig4BMY$Sex, correct=FALSE)
+
+chisq.test(Fig4BJZ$Year, Fig4BJZ$Sex, correct=FALSE)
+chisq.test(Fig4BAZ$Year, Fig4BAZ$Sex, correct=FALSE)
+chisq.test(Fig4BMZ$Year, Fig4BMZ$Sex, correct=FALSE)
+```
+
+FIGURE5B
+```{r}
+#See fig 3A for code description
+Fig5B <-arxivL_
+
+Fig5B <- mutate(Fig5B, COVID= ifelse(Covid=="C" , "COVID-19", "Other")) 
+
+Fig5B <-filter(Fig5B, Year == "2020") 
+
+fig5B <- Fig5B %>% group_by(COVID,Sex) %>% summarize(n=n()) %>% mutate(freq= n/sum(n)) 
+
+fig5B <- fig5B %>% mutate(frequency = round(freq, digits = 3),cumul.sum = cumsum(freq),
+
+label=ifelse(Sex=="female", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3)) 
+
+fig5B <- filter(fig5B, Sex== "female")
+
+fig5B <- cbind(fig5B, CI3B)
+
+fig5B$labelpos <- ifelse(fig5B$Sex=="female", fig5B$frequency/2, 1 - fig5B$frequency/2)
+
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig5B.jpeg", quality=100, height=750,width=450)
+
+ggplot(fig5B, aes(x=COVID,y=freq, fill=COVID, color=COVID)) +
+  geom_bar(width=0.75, stat='identity') + geom_errorbar(aes(ymin=freq-CI, ymax=freq+CI), width=.2) +theme_light()+theme(text=element_text(size=25)) +ylab("Female Percentage") + xlab("Paper Topic") +scale_fill_manual(values=c("forestgreen", "forestgreen"))+ theme(legend.position = "none")+scale_color_manual(values=c("black","black"))+scale_y_continuous(labels = scales::percent)+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size=7) + geom_text(aes(y=cumul.sum, label=label), vjust=-1.5, size=7)
+```
+
+```{r}
+chisq.test(Fig5B$COVID, Fig5B$Sex, correct=FALSE)
+
+inference(y = Sex, x = COVID, data = Fig5B, statistic = "proportion", type = "ht", null = 0, 
+          alternative = "twosided" , success = "female", method = "theoretical")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(SUPPLEMENTARY Figures)
+
+--------------------------------------
+FIGURE 6
+```{r}
+#Reload bioRxivF in
+
+#Re-Reading Original Dataset
+bioRxivF <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/bioRxivF.csv"))
+
+#Using original dataset without 95% accuracy cutoff, removing COVID repeat papers through methods previously discussed
+FC3<- bioRxivF %>% filter(Topic == "COVID", Samples>=10) 
+FN3<- bioRxivF %>% filter(Topic != "COVID", Covid !="C", Samples>=10) 
+Fig6 <- rbind(FC3,FN3)
+
+# Creating multiple datasets with female-male ration at various cutoff levels
+F_50 <- Fig6 %>% filter(Accuracy >= 50) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale) %>% mutate(Accuracy_Level = 50)
+F_55 <- Fig6 %>% filter(Accuracy >= 55) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 55)
+F_60 <- Fig6 %>% filter(Accuracy >= 60) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 60)
+F_65 <- Fig6 %>% filter(Accuracy >= 65) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 65)
+F_70 <- Fig6 %>% filter(Accuracy >= 70) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 70)
+F_75 <- Fig6 %>% filter(Accuracy >= 75) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 75)
+F_80 <- Fig6 %>% filter(Accuracy >= 80) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 80)
+F_85 <- Fig6 %>% filter(Accuracy >= 85) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 85)
+F_90 <- Fig6 %>% filter(Accuracy >= 90) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 90)
+F_95 <- Fig6 %>% filter(Accuracy >= 95) %>% summarize(nfem= length(Sex[Sex=="female"]),nmale= length(Sex[Sex=="male"]),femratio= nfem/nmale)%>% mutate(Accuracy_Level = 95)
+	
+fig6 <- rbind(F_50, F_55, F_60, F_65, F_70, F_75, F_80, F_85, F_90, F_95)
+
+#Merging all female-male ratios
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig6.jpeg", quality=100, height=480, width = 720)
+ggplot(fig6, aes(x=Accuracy_Level, y=femratio)) + geom_point() + geom_line() + ggtitle("Ratio of Female-Male First Author Based on Accuracy cutoff") + ylab("Female:Male Ratio") + xlab("Name-Sex Accuacy") + ylim(0,1)
+
+
+#making two matrices for comparing the female-male ratio statistically for all accuracy vs the utilized 95% accuracy
+
+iF_50 <- Fig6 %>% filter(Accuracy >= 50) %>%  mutate(Accuracy_Level = 50)
+iF_95 <- Fig6 %>% filter(Accuracy >= 95) %>%  mutate(Accuracy_Level = 95)
+ifig6 <- rbind(iF_50, iF_95) 
+```
+
+FIGURE 7
+```{r}
+
+#Reload Biorxiv Dataset
+bioRxivF <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/bioRxivF.csv"))
+bioRxivL <- read.csv(url("https://raw.githubusercontent.com/AdamWilcockson-UBC/Code-for-COVID-Sex-Paper/master/bioRxivL.csv"))
+#Selecting articles with year 2016-2020 (As in the preprint servers, some errors occur when taking articles from arXiv and bioRxiv in this respect.
+yr <- c("2017","2018","2019","2020") 
+
+#Making matrics with all names processed through GenderAPI, and then same GenderAPI names, but put through the following conditions: Name-Sex Accuracy >95, Sample size of specific name in database >10
+
+FNB <- bioRxivF%>% filter(Server == "Biorxiv",Year %in% yr) %>% summarize(n=n()) %>% mutate(Cut="All", AuthorPosition= "First Author") 
+LNB<- bioRxivL%>% filter(Server == "Biorxiv",Year %in% yr) %>% summarize(n=n())  %>% mutate(Cut="All", AuthorPosition= "Last Author")
+FNA <- arxivF%>% filter(Year %in% yr)  %>% summarize(n=n()) %>% mutate(Cut="All", AuthorPosition= "First Author")
+LNA <- arxivL %>% filter(Year %in% yr) %>% summarize(n=n()) %>% mutate(Cut="All", AuthorPosition= "Last Author")
+FNTB <- bioRxivF %>% filter(Server == "Biorxiv",Year %in% yr, Accuracy >=95, Samples>=10)%>% summarize(n=n()) %>% mutate(Cut="Trimmed", AuthorPosition= "First Author") 
+LNTB <- bioRxivL %>% filter(Server == "Biorxiv",Year %in% yr, Accuracy >=95, Samples>=10)%>% summarize(n=n()) %>% mutate(Cut="Trimmed", AuthorPosition= "Last Author")
+FNTA <- arxivF %>% filter(Year %in% yr, Accuracy >=95, Samples>=10)%>% summarize(n=n()) %>% mutate(Cut="Trimmed", AuthorPosition= "First Author")
+LNTA <- arxivL %>% filter(Year %in% yr, Accuracy >=95, Samples>=10)%>% summarize(n=n())%>% mutate(Cut="Trimmed", AuthorPosition= "Last Author")
+
+#Merging, and determining % of papers preserved by dividing by original N.
+BFNG <- rbind(FNB,FNTB)
+BFNG <- mutate(BFNG, freq=n/29735, Server="bioRxiv")
+
+BLNG <- rbind(LNB,LNTB)
+BLNG <- mutate(BLNG, freq=n/29588, Server="bioRxiv")
+
+AFNG <- rbind(FNA,FNTA)
+AFNG <- mutate(AFNG, freq=n/71349, Server="arXiv")
+
+ALNG <- rbind(LNA,LNTA)
+ALNG <- mutate(ALNG, freq=n/71362, Server="arXiv")
+
+FIG7 <- rbind(BFNG, BLNG, AFNG, ALNG)
+
+FIG7 <- filter(FIG7, Cut == "Trimmed")
+
+#Preparing dataset for graphing
+FIG7 <- FIG7 %>% mutate(frequency = round(freq, digits = 4),Flabel=ifelse(Cut=="Trimmed", paste0("N=", n ,""))) 
+
+#Plot
+
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\FIG7.jpeg", quality=100, height= 480, width = 720)
+ggplot(FIG7, aes(fill= AuthorPosition, y=freq, x=Server)) + geom_bar(position="dodge",stat="identity") + ylab("Percent of Names Retained")+ xlab("Preprint Server") +ggtitle("Author Retention Based on GenderAPI Confidence Cutoff") + scale_y_continuous(labels = scales::percent, limits = c(0,1)) +theme_light() +scale_fill_manual(values= c("mediumseagreen", "darkorange1"))  + geom_text(aes(label= paste0(100*frequency,"%")), position=position_dodge(width=0.9), vjust=12.5,size=5) +labs(fill = "Author Position") +theme(text=element_text(size=17)) # + geom_text(aes(y=freq, label=Flabel), vjust=-0.5, size=3) (IF YOU WANT TO SEE REMAINING N COUNT)
+```
+
+
+FIGURE 8
+
+MCO is an abbreviation for "Microbiology Continental Origin"
+```{r}
+#RemovingAll blank name spaces, due to GENDERAPI name errors. 
+MCO <- MCO %>% filter( !is.na(Name), !is.na(Continent)) %>% mutate("Cutoff" = "All") 
+
+#Creating a "cutoff" matrix, with all names that satisfy the normal cutoff parameters (database size >=10, name-sex accuracy >=95%)
+MCOcutoff <- MCO %>% filter(Samples >=10, Accuracy >= 95, Year %in% yr) %>%mutate(Cutoff="Above")
+
+#Creating a matrix with all the names that get cut off by standard parameters
+MCOreverse <- MCO %>% filter(Accuracy <= 95, Year %in% yr) %>% mutate(Cutoff="Below")
+
+#Creating a matrix for the "all" column in the figure produced at the end of this section
+MCOb <-rbind(MCOcutoff,MCOreverse)
+```
+
+Make tables showing the proportion of topics/sex by Year.
+```{r}
+
+#Making a table that calculates the proportion of names by continent that make normal cutoff resrtictions.
+PROP_NationA <- MCOcutoff %>% group_by(Continent) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), label=ifelse(Continent=="South America", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3), "Cutoff"= "Above/Equal to")
+
+#Making a table that calculates the proportion of names by continent that get cutoff by restrictions. (Mutually exclusive from above)
+PROP_NationB <- MCOreverse %>% group_by(Continent) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), label=ifelse(Continent=="South America", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3), "Cutoff"= "Below" )
+
+#Making a table that calculates the continental distribution of all names from dataset
+PROP_NationAll <- MCOb %>% group_by(Continent) %>% summarise(n=n())%>% mutate(freq= n/sum(n),cumul.sum = cumsum(freq), label=ifelse(Continent=="South America", paste0("N=", sum(n)),""),frequency = round(freq, digits = 3), "Cutoff"= "Total")
+```
+
+```{r}
+#Matrix for statistical tests
+Nationi <- rbind(MCOcutoff, MCOreverse)
+#Matrix for graphing
+Nation <- rbind(PROP_NationA,PROP_NationB,PROP_NationAll)
+```
+
+```{r}
+jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig8.jpeg", quality=100,, width = 720, height = 480)
+ggplot(Nation, aes(fill= Continent, x=Cutoff, y=freq)) + geom_bar(position="stack",stat="identity") + ylab("Percentage")+ggtitle("Microbiology First Author Continent of Residence based on Name-Sex Accuracy") +theme_classic()+ xlab("95% Accuracy, Samples=10")+ geom_text(aes(y=cumul.sum, label=label), vjust=-0.5, size=3)+ scale_y_continuous(labels = scales::percent) + scale_fill_manual(values=c("red4", "seagreen3","orange3","royalblue4","goldenrod1","orchid3","blue"))+theme_light()+theme(text=element_text(size=15))
+```
+
+```{r}
+chisq.test(Nationi$Cutoff, Nationi$Continent, correct= FALSE)
+```
+
+
+UNUSED FIGURES
+
+------------------------------
+Unused Figure Supplementary to 3A
+```{r}
+#Filtering Names into COVID vs. non-COVID papers
+
+#Create a table with only the Biorxiv and Medrxiv covid-related papers
+FC4<- bioRxivF_ %>% filter(Topic == "COVID") 
+
+#Create a table with the opposite, remove any papers labelled "C" (As they are repeats)
+FN4<- bioRxivF_ %>% filter(Topic != "COVID", Covid !="C") 
+
+
+FN4$Year <- as.character(FN4$Year)
+
+#Renaming non-covid 2020 papers to "2020 Other" 
+FN4$Year[FN4$Year == "2020"] <- "2020 Other"
+
+#Renaming COVID-19 Papers year to 2020 COVID-19 for Graphing 
+FC4 <- mutate(FC4, Year = "2020 COVID-19")
+
+Fig4 <- rbind(FC4,FN4) #Merge the two cells to recreate original table, now with no COVID-19 Paper repeats
+
+
+fig4 <-Fig4 %>% group_by(Year, Sex) %>% summarise(n=n()) %>% mutate(freq= n/sum(n), cumsum = cumsum(freq), label=ifelse(Sex=="male", paste0("N=", sum(n)),""))%>% mutate(frequency = round(freq, digits = 3))
+
+fig4$labelpos <- ifelse(fig4$Sex=="female", fig4$frequency/2, 1 - fig4$frequency/2)
+
+#Plot4
+#jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\Fig4.jpeg", quality=100, height=480, width= 720)
+ggplot(fig4[order(fig4$Sex, decreasing  = T),], aes(fill= factor(Sex, levels=c("male","female" ) ), x=factor(Year, levels=c("2017","2018","2019", "2020 Other", "2020 COVID-19" ) ), y=freq)) + geom_bar(position="stack",stat="identity") + ylab("Percentage")+ggtitle("Yearly First Author Sex Proportions") + scale_y_continuous(labels = scales::percent) +scale_fill_manual(values=c("royalblue1", "mediumorchid"))+ theme(legend.title = element_blank())+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size = 4.5) + geom_text(aes(y=cumsum, label=label), vjust=-0.5, size=3)+xlab("Year")+theme_light()+theme(text=element_text(size=17))+ theme(legend.title = element_blank())
+```
+
+```{r}
+ggplot(fig4[order(fig4$Sex, decreasing  = T),], aes(fill= factor(Sex, levels=c("male","female" ) ), x=factor(Year, levels=c("2017","2018","2019", "2020 Other", "2020 COVID-19" ) ), y=freq)) + geom_bar(position="stack",stat="identity") + ylab("Percentage")+ggtitle("Yearly First Author Sex Proportions") + scale_y_continuous(labels = scales::percent) +scale_fill_manual(values=c("royalblue1", "mediumorchid"))+ theme(legend.title = element_blank())+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size = 4.5) + geom_text(aes(y=cumsum, label=label), vjust=-0.5, size=3)+xlab("Year")
+```
+
+UNUSED FIGURE SUPPLEMENTARY TO 3B
+```{r}
+LC4<- bioRxivL_ %>% filter(Topic == "COVID") 
+LN4<- bioRxivL_ %>% filter(Topic != "COVID", Covid !="C") 
+LN4$Year <- as.character(LN4$Year)
+LN4$Year[LN4$Year == "2020"] <- "2020 Other"
+LC4 <- mutate(LC4, Year = "2020 COVID-19")
+Lig4 <- rbind(LC4,LN4) 
+Lig4 <-Lig4 %>% group_by(Year, Sex) %>% summarise(n=n()) %>% mutate(freq= n/sum(n), cumsum = cumsum(freq), label=ifelse(Sex=="male", paste0("N=", sum(n)),""))%>% mutate(frequency = round(freq, digits = 3))
+Lig4$labelpos <- ifelse(Lig4$Sex=="female", Lig4$frequency/2, 1 - Lig4$frequency/2)
+#jpeg(file= "C:\\Users\\adamw\\Documents\\Gender Project\\Plots\\LFig4.jpeg", quality=100, height=480, width=720)
+ggplot(Lig4[order(Lig4$Sex, decreasing  = T),], aes(fill= factor(Sex, levels=c("male","female" ) ),  x=factor(Year, levels=c("2017","2018","2019", "2020 Other", "2020 COVID-19" ) ), y=freq)) + geom_bar(position="stack",stat="identity") + ylab("Percentage")+ggtitle("Yearly Last Author Sex Proportions") + scale_y_continuous(labels = scales::percent) +scale_fill_manual(values=c("royalblue1", "mediumorchid"))+ theme(legend.title = element_blank())+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size = 4.5) + geom_text(aes(y=cumsum, label=label), vjust=-0.5, size=3)
+```
+
+```{r}
+ggplot(Lig4[order(Lig4$Sex, decreasing  = T),], aes(fill= factor(Sex, levels=c("male","female" ) ),  x=factor(Year, levels=c("2017","2018","2019", "2020 Other", "2020 COVID-19" ) ), y=freq)) + geom_bar(position="stack",stat="identity") + ylab("Percentage")+ggtitle("Yearly Last Author Sex Proportions") + scale_y_continuous(labels = scales::percent) +scale_fill_manual(values=c("royalblue1", "mediumorchid"))+ theme(legend.title = element_blank())+ geom_text(aes(label = paste0(100*frequency,"%"),y=labelpos),size = 4.5) + geom_text(aes(y=cumsum, label=label), vjust=-0.5, size=3)
+```
